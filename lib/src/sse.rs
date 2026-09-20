@@ -21,6 +21,12 @@
 //! The `u` in `_mm_loadu_ps` means unaligned. Each address must still point to
 //! four contiguous, initialized `f32` values, but it need not be aligned to a
 //! 16-byte SIMD boundary.
+//!
+//! The implementation supplies [`DotRegister`] for `__m128`. One
+//! shared-kernel iteration loads sixteen floats into four
+//! registers, updates sixteen independent lane sums with separate multiply
+//! and add operations, and leaves any incomplete block to the kernel's scalar
+//! tail.
 
 use core::arch::x86_64::__m128;
 use core::arch::x86_64::_mm_add_ps;
@@ -32,6 +38,7 @@ use core::arch::x86_64::_mm_storeu_ps;
 use crate::RegisterPack;
 use crate::kernel::DotRegister;
 
+/// Use one four-lane SSE vector as each register in the four-position pack.
 impl DotRegister for __m128 {
     const BLOCK_LEN: usize = 16;
 
@@ -83,6 +90,7 @@ impl DotRegister for __m128 {
     }
 }
 
+/// Run the shared dot-product kernel with four SSE registers.
 pub(crate) fn dot_f32(a: &[f32], b: &[f32]) -> f32 {
     crate::kernel::dot_f32::<__m128>(a, b)
 }

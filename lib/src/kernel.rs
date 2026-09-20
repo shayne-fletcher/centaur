@@ -1,12 +1,46 @@
-//! Shared dot-product machinery for scalar and SIMD register values.
+//! The dot-product algorithm shared by every register backend.
 //!
-//! The kernel owns the common-prefix and tail traversal. A `DotRegister`
-//! supplies the meaning of one register-sized block, so the same loop can use
-//! four scalar registers or four four-lane NEON registers.
+//! # One algorithm, three register types
+//!
+//! [`DotRegister`] describes the operations the algorithm needs from one
+//! register type. The generic [`dot_f32`] loop is compiled separately for the
+//! selected type; there is no trait object or runtime method dispatch.
+//!
+//! ```text
+//! backend   register type    lanes per register    registers    block length
+//! ───────   ─────────────    ──────────────────    ─────────    ────────────
+//! scalar    f32                       1                 4              4
+//! NEON      float32x4_t               4                 4             16
+//! SSE       __m128                    4                 4             16
+//! ```
+//!
+//! A complete SIMD input block is divided into four registers:
+//!
+//! ```text
+//! input block
+//! ┌─────────────┬─────────────┬───────────────┬─────────────────┐
+//! │ x0 x1 x2 x3 │ x4 x5 x6 x7 │ x8 x9 x10 x11 │ x12 x13 x14 x15 │
+//! └──────┬──────┴──────┬──────┴───────┬───────┴────────┬────────┘
+//!        │             │              │                │
+//!        ▼             ▼              ▼                ▼
+//!   register 0    register 1     register 2       register 3
+//! ```
+//!
+//! The scalar backend uses the same four positions, with one `f32` in each
+//! position. A pack position and, for SIMD, a lane identify one independent
+//! running sum. The next block updates those same sums with the next input
+//! values.
+//!
+//! # Division of responsibility
+//!
+//! This module owns common-prefix selection, complete-block traversal, four
+//! independent accumulation chains, and the final scalar tail. A backend owns
+//! the register representation, loads, multiply-add operation, and horizontal
+//! reduction. The public entry point selects a backend at compile time.
 
 use crate::RegisterPack;
 
-/// The operations needed to use one register type in the dot-product kernel.
+/// The operations one register type supplies to the dot-product kernel.
 ///
 /// `V` is one register value. It may be a scalar such as `f32`, which holds
 /// one number, or a SIMD register such as `float32x4_t`, which holds four
@@ -108,6 +142,10 @@ pub(crate) fn dot_f32<R: DotRegister>(a: &[f32], b: &[f32]) -> f32 {
     total
 }
 
+/// Use one scalar `f32` as each register in the four-position pack.
+///
+/// One iteration consumes four inputs. Pack position `i` accumulates input
+/// positions `i`, `i + 4`, `i + 8`, and so on.
 impl DotRegister for f32 {
     const BLOCK_LEN: usize = 4;
 

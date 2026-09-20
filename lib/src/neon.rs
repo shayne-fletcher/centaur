@@ -33,6 +33,11 @@
 //! address. `as_chunks::<4>()` supplies four contiguous, initialized `f32`
 //! values for each load, while preserving the slice's ordinary `f32`
 //! alignment requirement.
+//!
+//! The implementation supplies [`DotRegister`] for `float32x4_t`. One
+//! shared-kernel iteration loads sixteen floats into
+//! four registers, updates sixteen independent lane sums with fused
+//! multiply-add, and leaves any incomplete block to the kernel's scalar tail.
 
 use core::arch::aarch64::float32x4_t;
 use core::arch::aarch64::vaddvq_f32;
@@ -43,6 +48,7 @@ use core::arch::aarch64::vld1q_f32;
 use crate::RegisterPack;
 use crate::kernel::DotRegister;
 
+/// Use one four-lane NEON vector as each register in the four-position pack.
 impl DotRegister for float32x4_t {
     const BLOCK_LEN: usize = 16;
 
@@ -101,6 +107,7 @@ impl DotRegister for float32x4_t {
     }
 }
 
+/// Run the shared dot-product kernel with four NEON registers.
 pub(crate) fn dot_f32(a: &[f32], b: &[f32]) -> f32 {
     crate::kernel::dot_f32::<float32x4_t>(a, b)
 }
