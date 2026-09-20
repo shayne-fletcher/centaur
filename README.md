@@ -55,6 +55,7 @@ Centaur is at an early experimental stage. Its API and backend structure may cha
 cargo build                            # build
 cargo test                             # the whole suite
 cargo test --features scalar-only      # force the scalar backend
+cargo doc --workspace --no-deps --document-private-items # build developer docs
 ```
 
 This repository pins a nightly toolchain for formatting. The library itself builds on stable Rust.

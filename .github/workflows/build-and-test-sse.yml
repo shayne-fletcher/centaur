@@ -82,7 +82,7 @@ jobs:
       # Pages is already enabled with the owner token; this step only records
       # artifact metadata.
     - name: build docs
-      run: cargo doc --workspace --no-deps
+      run: cargo doc --workspace --no-deps --document-private-items
     - name: disable jekyll
       run: touch target/doc/.nojekyll
     - name: copy logo
