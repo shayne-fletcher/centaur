@@ -7,7 +7,12 @@ license = "BSD-3-Clause"
 [dependencies]
 
 [features]
+bench-api = []
 scalar-only = []
 
 [lib]
 name = "centaur"
+
+[[example]]
+name = "bench"
+required-features = ["bench-api"]

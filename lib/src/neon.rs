@@ -108,6 +108,40 @@ impl DotRegister for float32x4_t {
 }
 
 /// Run the shared dot-product kernel with four NEON registers.
-pub(crate) fn dot_f32(a: &[f32], b: &[f32]) -> f32 {
+#[cfg_attr(feature = "bench-api", inline(never))]
+pub fn dot_f32(a: &[f32], b: &[f32]) -> f32 {
     crate::kernel::dot_f32::<float32x4_t>(a, b)
+}
+
+/// Compute a dot product with one four-lane NEON accumulator.
+///
+/// This is a benchmark control for the production four-register kernel. It
+/// deliberately keeps one loop-carried vector dependency chain.
+#[cfg(feature = "bench-api")]
+#[inline(never)]
+pub fn dot_f32_one_register(a: &[f32], b: &[f32]) -> f32 {
+    let n = a.len().min(b.len());
+    let (lhs_chunks, lhs_tail) = a[..n].as_chunks::<4>();
+    let (rhs_chunks, rhs_tail) = b[..n].as_chunks::<4>();
+
+    // SAFETY: this module is compiled only when AArch64 NEON is enabled.
+    let mut accumulator = unsafe { vdupq_n_f32(0.0) };
+    for (lhs, rhs) in lhs_chunks.iter().zip(rhs_chunks) {
+        // SAFETY: each typed chunk contains four initialized contiguous
+        // values, and this module is compiled only with NEON enabled.
+        accumulator = unsafe {
+            vfmaq_f32(
+                accumulator,
+                vld1q_f32(lhs.as_ptr()),
+                vld1q_f32(rhs.as_ptr()),
+            )
+        };
+    }
+
+    // SAFETY: accumulator is a native NEON register and NEON is enabled.
+    let mut total = unsafe { vaddvq_f32(accumulator) };
+    for (&lhs, &rhs) in lhs_tail.iter().zip(rhs_tail) {
+        total += lhs * rhs;
+    }
+    total
 }

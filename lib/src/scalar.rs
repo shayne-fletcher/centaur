@@ -23,9 +23,10 @@
 //! the fallback selected when an architecture-specific backend is unavailable
 //! or the `scalar-only` feature is enabled.
 
-// Retained as an internal comparison point for the later benchmark API.
+// Retained as the sequential comparison point for the benchmark API.
 #[cfg_attr(not(test), allow(dead_code))]
-pub(crate) fn dot_f32_scalar(a: &[f32], b: &[f32]) -> f32 {
+#[cfg_attr(feature = "bench-api", inline(never))]
+pub fn dot_f32_scalar(a: &[f32], b: &[f32]) -> f32 {
     // Pair matching elements, stopping at the shorter slice. Starting from
     // zero, add each product to one running sum in input order.
     a.iter().zip(b).fold(0.0, |acc, (&x, &y)| acc + x * y)

@@ -43,6 +43,14 @@
 //!   modules and selects the packed `f32` backend on every target.
 //! - `INV-NEON-001`: On AArch64 with NEON enabled, the default `dot_f32`
 //!   backend uses four `float32x4_t` registers.
+//! - `INV-BENCH-001`: Enabling `bench-api` does not introduce `std` into the
+//!   library.
+//! - `INV-BENCH-002`: Every benchmark variant processes the common prefix and
+//!   remains within the shared oracle bound.
+//! - `INV-BENCH-003`: M4 release assembly contains one scalar reference
+//!   chain, one NEON register chain, and four production NEON register chains.
+//! - `INV-BENCH-004`: The comparison surface and benchmark example are absent
+//!   unless `bench-api` is enabled.
 
 mod kernel;
 #[cfg(all(
@@ -51,6 +59,8 @@ mod kernel;
     target_feature = "neon"
 ))]
 mod neon;
+#[cfg(any(test, feature = "bench-api"))]
+mod oracle;
 mod pack;
 mod scalar;
 #[cfg(all(
@@ -61,6 +71,29 @@ mod scalar;
 mod sse;
 
 pub use pack::RegisterPack;
+
+/// Measurement-only functions used by the benchmark example.
+///
+/// This module is not supported application API. It exists only when the
+/// `bench-api` feature is enabled.
+#[cfg(feature = "bench-api")]
+#[doc(hidden)]
+pub mod comparison {
+    #[cfg(all(
+        not(feature = "scalar-only"),
+        target_arch = "aarch64",
+        target_feature = "neon"
+    ))]
+    pub use crate::neon::dot_f32 as dot_f32_neon_four;
+    #[cfg(all(
+        not(feature = "scalar-only"),
+        target_arch = "aarch64",
+        target_feature = "neon"
+    ))]
+    pub use crate::neon::dot_f32_one_register as dot_f32_neon_one;
+    pub use crate::oracle::dot_f32 as oracle;
+    pub use crate::scalar::dot_f32_scalar as dot_f32_sequential;
+}
 
 /// Compute a dot product over the common prefix of two slices.
 ///
@@ -113,23 +146,7 @@ mod tests {
     /// Check the public result against the widened oracle and the scalar
     /// reference.
     fn check(a: &[f32], b: &[f32]) {
-        let (oracle, sum_abs) = a
-            .iter()
-            .zip(b)
-            .fold((0.0_f64, 0.0_f64), |(sum, abs), (&a, &b)| {
-                let p = f64::from(a) * f64::from(b);
-                (sum + p, abs + p.abs())
-            });
-        // Allow rounding to grow with the number of f32 operations and with
-        // the total size of the products. In symbols:
-        //
-        //              n − 1
-        // bound = n × ε ×  Σ |aᵢ × bᵢ| + 10⁻⁶
-        //              i = 0
-        //
-        // Here ε is f32::EPSILON. sum_abs remains meaningful when large
-        // products cancel and make the final oracle value small.
-        let bound = a.len().min(b.len()) as f64 * f64::from(f32::EPSILON) * sum_abs + 1e-6;
+        let (oracle, bound) = crate::oracle::dot_f32(a, b);
         let sequential = f64::from(dot_f32_scalar(a, b));
         let packed = f64::from(dot_f32_packed(a, b));
         let public_result = f64::from(dot_f32(a, b));
@@ -211,6 +228,40 @@ mod tests {
             ))
         ))]
         assert_eq!(dot_f32(&a, &b), 0.0);
+    }
+
+    #[cfg(all(
+        feature = "bench-api",
+        not(feature = "scalar-only"),
+        target_arch = "aarch64",
+        target_feature = "neon"
+    ))]
+    #[test]
+    // Witnesses: INV-BENCH-002.
+    fn benchmark_variants_follow_the_public_contract() {
+        fn check_variants(a: &[f32], b: &[f32]) {
+            let (oracle, bound) = crate::oracle::dot_f32(a, b);
+            let variants = [
+                crate::comparison::dot_f32_sequential(a, b),
+                crate::comparison::dot_f32_neon_one(a, b),
+                crate::comparison::dot_f32_neon_four(a, b),
+            ];
+            for result in variants {
+                assert!((f64::from(result) - oracle).abs() <= bound);
+            }
+        }
+
+        for n in (0_usize..=33).chain([127, 1024]) {
+            let lhs: Vec<_> = (0..n + 3)
+                .map(|i| ((i * 17 % 101) as f32 - 50.0) / 50.0)
+                .collect();
+            let rhs: Vec<_> = (0..n + 5)
+                .map(|i| ((i * 29 % 97) as f32 - 48.0) / 48.0)
+                .collect();
+            check_variants(&lhs[..n], &rhs[..n]);
+            check_variants(&lhs[..n], &rhs);
+            check_variants(&lhs, &rhs[..n]);
+        }
     }
 
     #[test]

@@ -34,3 +34,5 @@ jobs:
       run: cargo check --lib
     - name: run NEON tests
       run: cargo test
+    - name: run benchmark comparison tests
+      run: cargo test --features bench-api
