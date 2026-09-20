@@ -1,4 +1,27 @@
-//! SIMD experiments in Rust.
+#![cfg_attr(not(test), no_std)]
+
+//! Centaur explores a simple way to keep SIMD algorithms understandable.
+//!
+//! A register is one value of type `V`. For a scalar implementation, `V` can
+//! be `f32`, which holds one number. For a SIMD implementation, `V` can be a
+//! four-lane floating-point register, which holds four numbers. A
+//! [`RegisterPack`] owns `M` independent registers of either kind.
+//!
+//! The public [`dot_f32`] function accepts ordinary slices and processes their
+//! common prefix. The current implementation uses four independent scalar
+//! accumulators. A later backend can replace those scalar registers with SIMD
+//! registers without changing the slice-based API or the pack shape.
+//!
+//! The library is `no_std`: its production code uses `core` and does not
+//! allocate. Tests and measurement tooling may use `std` under configuration.
+//!
+//! ## Invariant registry
+//!
+//! - `INV-CRATE-001`: The production library does not require `std`,
+//!   allocation, or operating-system services. This keeps the numerical
+//!   kernel usable from embedded and other `no_std` programs. The
+//!   `#![cfg_attr(not(test), no_std)]` attribute and `cargo check --lib` are
+//!   its build witnesses.
 
 mod pack;
 mod scalar;

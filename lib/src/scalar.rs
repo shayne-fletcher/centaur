@@ -112,6 +112,11 @@ mod tests {
     use super::*;
     use crate::dot_f32;
 
+    /// Check both implementations against the widened oracle and each other.
+    ///
+    /// The oracle performs the products and additions in `f64`. The bound
+    /// grows with the common-prefix length and the sum of absolute products,
+    /// allowing for the different `f32` addition orders.
     fn check(a: &[f32], b: &[f32]) {
         let (oracle, sum_abs) = a
             .iter()
@@ -120,12 +125,27 @@ mod tests {
                 let p = f64::from(a) * f64::from(b);
                 (sum + p, abs + p.abs())
             });
+        // Allow rounding to grow with the number of f32 operations and with
+        // the total size of the products. In symbols:
+        //
+        //              n − 1
+        // bound = n × ε ×  Σ |aᵢ × bᵢ| + 10⁻⁶
+        //              i = 0
+        //
+        // Here ε is f32::EPSILON. sum_abs remains meaningful when large
+        // products cancel and make the final oracle value small.
         let bound = a.len().min(b.len()) as f64 * f64::from(f32::EPSILON) * sum_abs + 1e-6;
         let sequential = f64::from(dot_f32_scalar(a, b));
-        let packed = f64::from(dot_f32(a, b));
+        // The public entry point currently uses the packed implementation,
+        // which groups additions by position modulo four. A future backend
+        // may use a different order, so it is expected to round differently
+        // from the sequential reference.
+        let public_result = f64::from(dot_f32(a, b));
         assert!((sequential - oracle).abs() <= bound);
-        assert!((packed - oracle).abs() <= bound);
-        assert!((packed - sequential).abs() <= 2.0 * bound);
+        assert!((public_result - oracle).abs() <= bound);
+        // Each result may be one bound away from the oracle, so their
+        // difference may be as large as two bounds.
+        assert!((public_result - sequential).abs() <= 2.0 * bound);
     }
 
     #[test]
