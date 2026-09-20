@@ -6,8 +6,11 @@
   SIMD experiments in Rust.
 </p>
 <p align="center">
-  <a href="https://github.com/shayne-fletcher/centaur/actions/workflows/build-and-test.yml">
-    <img src="https://github.com/shayne-fletcher/centaur/actions/workflows/build-and-test.yml/badge.svg" alt="rust ci">
+  <a href="https://github.com/shayne-fletcher/centaur/actions/workflows/build-and-test-ubuntu.yml">
+    <img src="https://github.com/shayne-fletcher/centaur/actions/workflows/build-and-test-ubuntu.yml/badge.svg" alt="Ubuntu CI">
+  </a>
+  <a href="https://github.com/shayne-fletcher/centaur/actions/workflows/build-and-test-neon.yml">
+    <img src="https://github.com/shayne-fletcher/centaur/actions/workflows/build-and-test-neon.yml/badge.svg" alt="ARM64 NEON CI">
   </a>
   <a href="https://shayne-fletcher.github.io/centaur/">
     <img src="https://img.shields.io/badge/docs-github.io-blue" alt="docs">
@@ -15,6 +18,8 @@
 </p>
 
 `centaur` is SIMD experiments in Rust.
+
+The project uses the pinned nightly Rust toolchain recorded in `rust-toolchain`.
 
 ## Building
 

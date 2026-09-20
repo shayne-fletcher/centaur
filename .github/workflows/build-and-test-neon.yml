@@ -1,0 +1,36 @@
+name: build and test (NEON)
+on:
+  push:
+  pull_request:
+env:
+  CARGO_NET_RETRY: "10"
+  CARGO_HTTP_MULTIPLEXING: "false"
+jobs:
+  neon:
+    runs-on: macos-14
+    steps:
+    - uses: actions/checkout@v4
+    - uses: SebRollen/toml-action@v1.0.2
+      id: read_rust_toolchain
+      with:
+        file: rust-toolchain
+        field: toolchain.channel
+    - uses: dtolnay/rust-toolchain@v1
+      with:
+        toolchain: ${{ steps.read_rust_toolchain.outputs.value }}
+        components: clippy, rustfmt
+    - uses: Swatinem/rust-cache@v2
+      with:
+        shared-key: neon-build-cache
+        cache-targets: true
+        cache-all-crates: true
+    - name: verify ARM64 runner
+      run: test "$(uname -m)" = "arm64"
+    - name: format check
+      run: cargo fmt --all --check
+    - name: clippy check
+      run: cargo clippy --all-targets -- -D warnings
+    - name: library check
+      run: cargo check --lib
+    - name: run NEON tests
+      run: cargo test

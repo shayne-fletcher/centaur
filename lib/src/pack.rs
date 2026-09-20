@@ -77,7 +77,8 @@
 //!   functions by corresponding register index.
 //! - `INV-PACK-003`: Operations on an empty pack invoke no element callback.
 
-use core::ops::{Index, IndexMut};
+use core::ops::Index;
+use core::ops::IndexMut;
 
 /// An array of `M` registers of type `V`.
 ///
