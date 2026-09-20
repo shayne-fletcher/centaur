@@ -1,4 +1,4 @@
-"""Plot the Apple M4 Max measurements recorded in the project README."""
+"""Plot the recorded Apple M4 Max accumulator measurements."""
 
 from pathlib import Path
 
@@ -6,7 +6,7 @@ import matplotlib.pyplot as plt
 
 
 ROOT = Path(__file__).resolve().parents[1]
-README = ROOT / "README.md"
+BENCHMARK = ROOT / "docs" / "m4-accumulator-benchmark.md"
 OUTPUT = ROOT / "images" / "m4-dot-f32-benchmark.png"
 
 COLORS = ("#64748b", "#f59e0b", "#2563eb")
@@ -14,7 +14,7 @@ COLORS = ("#64748b", "#f59e0b", "#2563eb")
 
 def read_measurements() -> tuple:
     """Read the marked benchmark table, which is the measurement source."""
-    text = README.read_text()
+    text = BENCHMARK.read_text()
     table = text.split("<!-- benchmark-data:start -->", 1)[1].split(
         "<!-- benchmark-data:end -->", 1
     )[0]
