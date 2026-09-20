@@ -10,7 +10,8 @@
 //! The public [`dot_f32`] function accepts ordinary slices and processes their
 //! common prefix. The scalar fallback uses four independent scalar
 //! accumulators; the AArch64 backend uses four independent four-lane NEON
-//! registers. Both use the same pack-shaped kernel without changing the
+//! registers; and the x86-64 backend uses four independent four-lane SSE
+//! registers. All three use the same pack-shaped kernel without changing the
 //! slice-based API.
 //!
 //! The library is `no_std`: its production code uses `core` and does not
@@ -32,12 +33,32 @@
 //!   including values that would produce NaN if read.
 //! - `INV-API-004`: NaN, infinity, invalid infinity-times-zero, and signed
 //!   zero follow ordinary `f32` arithmetic without normalization.
+//! - `INV-X86-001`: On x86-64 with SSE enabled, the default `dot_f32` backend
+//!   uses four `__m128` registers.
+//! - `INV-X86-002`: One complete SSE iteration consumes sixteen input floats;
+//!   incomplete input remains in the scalar tail.
+//! - `INV-X86-003`: SSE loads and stores require four valid contiguous `f32`
+//!   values but do not require 16-byte SIMD alignment.
+//! - `INV-DISPATCH-001`: The `scalar-only` feature excludes the NEON and SSE
+//!   modules and selects the packed `f32` backend on every target.
+//! - `INV-NEON-001`: On AArch64 with NEON enabled, the default `dot_f32`
+//!   backend uses four `float32x4_t` registers.
 
 mod kernel;
-#[cfg(all(target_arch = "aarch64", target_feature = "neon"))]
+#[cfg(all(
+    not(feature = "scalar-only"),
+    target_arch = "aarch64",
+    target_feature = "neon"
+))]
 mod neon;
 mod pack;
 mod scalar;
+#[cfg(all(
+    not(feature = "scalar-only"),
+    target_arch = "x86_64",
+    target_feature = "sse"
+))]
+mod sse;
 
 pub use pack::RegisterPack;
 
@@ -55,11 +76,29 @@ pub use pack::RegisterPack;
 /// assert_eq!(centaur::dot_f32(&[1.0, 2.0, 3.0], &[4.0, 5.0]), 14.0);
 /// ```
 pub fn dot_f32(a: &[f32], b: &[f32]) -> f32 {
-    #[cfg(all(target_arch = "aarch64", target_feature = "neon"))]
+    #[cfg(all(
+        not(feature = "scalar-only"),
+        target_arch = "aarch64",
+        target_feature = "neon"
+    ))]
     {
         neon::dot_f32(a, b)
     }
-    #[cfg(not(all(target_arch = "aarch64", target_feature = "neon")))]
+    #[cfg(all(
+        not(feature = "scalar-only"),
+        target_arch = "x86_64",
+        target_feature = "sse"
+    ))]
+    {
+        sse::dot_f32(a, b)
+    }
+    #[cfg(any(
+        feature = "scalar-only",
+        not(any(
+            all(target_arch = "aarch64", target_feature = "neon"),
+            all(target_arch = "x86_64", target_feature = "sse")
+        ))
+    ))]
     {
         scalar::dot_f32_packed(a, b)
     }
@@ -140,6 +179,38 @@ mod tests {
         let b = [1.0; 4];
         assert_eq!(dot_f32_scalar(&a, &b), 1.0);
         assert_eq!(dot_f32_packed(&a, &b), 0.0);
+    }
+
+    #[test]
+    // Witnesses: INV-X86-001, INV-X86-002, INV-DISPATCH-001, and
+    // INV-NEON-001.
+    fn backend_block_width_is_observable() {
+        let mut a = [0.0; 32];
+        a[0] = 1e8;
+        a[4] = 1.0;
+        a[16] = -1e8;
+        let b = [1.0; 32];
+
+        #[cfg(feature = "scalar-only")]
+        assert_eq!(dot_f32(&a, &b), 0.0);
+
+        #[cfg(all(
+            not(feature = "scalar-only"),
+            any(
+                target_arch = "x86_64",
+                all(target_arch = "aarch64", target_feature = "neon")
+            )
+        ))]
+        assert_eq!(dot_f32(&a, &b), 1.0);
+
+        #[cfg(all(
+            not(feature = "scalar-only"),
+            not(any(
+                target_arch = "x86_64",
+                all(target_arch = "aarch64", target_feature = "neon")
+            ))
+        ))]
+        assert_eq!(dot_f32(&a, &b), 0.0);
     }
 
     #[test]

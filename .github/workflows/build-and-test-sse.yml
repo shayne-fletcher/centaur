@@ -1,4 +1,4 @@
-name: build and test (Ubuntu)
+name: build and test (SSE)
 on:
   push:
   pull_request:
@@ -30,7 +30,7 @@ jobs:
       run: cargo clippy --all-targets -- -D warnings
     - name: build
       run: cargo build
-  test:
+  x86-simd:
     runs-on: ubuntu-latest
     needs: build
     steps:
@@ -49,7 +49,9 @@ jobs:
         shared-key: shared-build-cache
         cache-targets: true
         cache-all-crates: true
-    - name: run tests
+    - name: verify x86-64 runner
+      run: test "$(uname -m)" = "x86_64"
+    - name: run x86 SIMD tests
       run: cargo test
   publish-docs:
     runs-on: ubuntu-latest

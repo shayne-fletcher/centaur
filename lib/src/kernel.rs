@@ -23,15 +23,19 @@ use crate::RegisterPack;
 ///
 /// The pack count is the number of independent registers in flight. It is
 /// separate from the number of lanes inside one SIMD register. The kernel
-/// uses this trait to keep its traversal and accumulation order the same for
-/// scalar and SIMD backends while allowing each backend to define what one
-/// register means.
+/// uses this trait to keep its traversal and four independent accumulation
+/// chains the same for scalar and SIMD backends. Each backend defines what one
+/// register means and how its final horizontal reduction is performed.
 pub(crate) trait DotRegister: Copy {
     /// Number of input floats consumed by one complete kernel iteration.
     ///
-    /// For the scalar backend this is four floats: one for each scalar
-    /// accumulator. For the NEON backend this is sixteen floats: four floats
-    /// for each of four SIMD registers.
+    /// ```text
+    /// BLOCK_LEN = registers in the pack × f32 lanes in each register
+    /// ```
+    ///
+    /// This kernel fixes the pack at four registers. Therefore the scalar
+    /// backend consumes `4 × 1 = 4` floats, while the NEON and SSE backends
+    /// consume `4 × 4 = 16` floats.
     const BLOCK_LEN: usize;
 
     /// Return the additive identity for one register value.
